@@ -1,51 +1,39 @@
 # ============================================
-# 1. Data & Large Files (절대 업로드 금지)
+# 1. Data (데이터는 구조만 남기고 내용은 무시)
 # ============================================
-data/*
-!data/.gitkeep
-datasets/
-*.zip
-*.tar.gz
-*.mp4
-*.jpg
-*.png
+train_data/*
+!train_data/.gitkeep
+
+test_data/*
+!test_data/.gitkeep
 
 # ============================================
-# 2. Model Weights & Outputs (용량 및 보안)
+# 2. Model Weights (최종 가중치 포함 여부에 따라 조절)
 # ============================================
-weights/
-outputs/*
-!outputs/.gitkeep
-submissions/*
-!submissions/.gitkeep
-*.pth
-*.pt
-*.ckpt
-*.h5
+model/*
+!model/.gitkeep
+# model/*
+# !model/model.pt
 
 # ============================================
-# 3. Logs & Experiment Tracking
-# ============================================
-wandb/
-logs/
-*.log
-
-# ============================================
-# 4. Python & Virtual Env (기본 파이썬 설정)
+# 3. Python & OS & IDE
 # ============================================
 __pycache__/
 *.py[cod]
 *$py.class
 .env
 .venv
-env/
-venv/
-ENV/
+env/venv/  # env 폴더 내의 가상환경 폴더만 무시 (Dockerfile 등은 제외)
 
-# ============================================
-# 5. IDE & System Files
-# ============================================
 .vscode/
 .ipynb_checkpoints/
 .DS_Store
 Thumbs.db
+
+# ============================================
+# 4. Logs & Others
+# ============================================
+wandb/
+*.log
+*.zip
+*.tar.gz
