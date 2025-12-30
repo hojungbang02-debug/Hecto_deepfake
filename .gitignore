@@ -37,3 +37,20 @@ wandb/
 *.log
 *.zip
 *.tar.gz
+
+# ============================================
+# 5. External Large Datasets (원본 영상 보관소)
+# ============================================
+external_data/
+downloads/
+FaceForensics/        # FF++ 다운로드 스크립트 폴더
+dfdc*/                # DFDC 관련 폴더들
+
+# 대용량 압축 파일 및 영상 파일 안전장치 (실수로 딴 데 넣었을 때 대비)
+*.zip
+*.tar
+*.tar.gz
+*.mp4
+*.avi
+*.mov
+*.mkv
