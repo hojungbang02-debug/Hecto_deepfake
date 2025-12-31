@@ -6,6 +6,7 @@ train_data/*
 
 test_data/*
 !test_data/.gitkeep
+val_data/
 
 # ============================================
 # 2. Model Weights (최종 가중치 포함 여부에 따라 조절)
@@ -23,7 +24,8 @@ __pycache__/
 *$py.class
 .env
 .venv
-env/venv/  # env 폴더 내의 가상환경 폴더만 무시 (Dockerfile 등은 제외)
+# env 폴더 내의 가상환경 폴더만 무시
+env/venv/
 
 .vscode/
 .ipynb_checkpoints/
@@ -43,10 +45,14 @@ wandb/
 # ============================================
 external_data/
 downloads/
-FaceForensics/        # FF++ 다운로드 스크립트 폴더
-dfdc*/                # DFDC 관련 폴더들
+# FF++ 다운로드 스크립트 폴더
+FaceForensics/
+# DFDC 관련 폴더들
+dfdc*/
+# 제출용 파일
+submission.csv
 
-# 대용량 압축 파일 및 영상 파일 안전장치 (실수로 딴 데 넣었을 때 대비)
+# 대용량 압축 파일 및 영상 파일 안전장치
 *.zip
 *.tar
 *.tar.gz
