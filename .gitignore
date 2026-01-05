@@ -51,6 +51,7 @@ FaceForensics/
 dfdc*/
 # 제출용 파일
 submission.csv
+ff_dataset/
 
 # 대용량 압축 파일 및 영상 파일 안전장치
 *.zip
@@ -60,3 +61,4 @@ submission.csv
 *.avi
 *.mov
 *.mkv
+*.jpg
