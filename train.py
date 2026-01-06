@@ -93,13 +93,14 @@ def train_one_epoch(model: nn.Module, loader, criterion, optimizer, scheduler: o
         # Log metrics to wandb/step
         if use_wandb:
             grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
-            wandb.log({"train_step": loss.item()}, step=global_step)
-            wandb.log({"lr/step": optimizer.param_groups[0]['lr']}, step=global_step)
-            wandb.log({"grad_norm/step": grad_norm}, step=global_step)
             wandb.log({
+                "gloal_step": global_step,
+                "train_loss/step": loss.item(),
+                "lr/step": optimizer.param_groups[0]['lr'],
+                "grad_norm/step": grad_norm,
                 "pred/prob_mean": probs.mean().item(),
                 "pred/prob_std": probs.std().item(),
-            }, step=global_step)
+            })
 
 
         
@@ -155,6 +156,16 @@ def main():
         config=CONFIG,
         name=CONFIG['run_name']
     )
+    # 기본 x축은 global_step
+    wandb.define_metric("global_step")
+    wandb.define_metric("train/*", step_metric="global_step")
+    wandb.define_metric("lr/*", step_metric="global_step")
+    wandb.define_metric("grad/*", step_metric="global_step")
+    wandb.define_metric("pred/*", step_metric="global_step")
+
+    # val 쪽은 epoch을 x축으로
+    wandb.define_metric("epoch")
+    wandb.define_metric("val/*", step_metric="epoch")
 
     # ----------------------------------------------------
     # 1. 데이터셋 & 로더 준비
@@ -260,11 +271,12 @@ def main():
         if USE_WANDB is not None:
             # Wandb에 epoch별 메트릭 기록
             wandb.log({
+                "epoch": epoch + 1,
                 "train/loss": train_loss,
                 "train/accuracy": train_acc,
                 "val/loss": val_loss,
                 "val/accuracy": val_acc,
-            }, step=epoch+1)
+            })
             
     print(f"\n학습 완료! 최고 정확도: {best_acc:.2f}%")
     print(f"모델 저장 위치: {CONFIG['save_path']}")
