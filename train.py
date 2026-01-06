@@ -7,23 +7,41 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 import random
 import numpy as np
+import wandb
 
 # 모듈들 불러오기
 from src.dataset import DeepFakeDataset
-from src.model import DeepFakeModel
+from src.model import DeepFakeModel, DeepFakeModelDinoV2
+from src.scheduler import cosine_with_min_lr
 
 # ====================================================
 # 하이퍼파라미터 설정
 # ====================================================
-CONFIG = {
-    'model_name': 'efficientnet_b4',  
-    'image_size': 380,        
-    'batch_size': 8,          
-    'epochs': 20,             
-    'lr': 1e-4,
-    'seed': 42,
-    'save_path': './model/best_model.pth' 
+OPTIM_CONFIG = {
+    "backbone": {
+        "lr": 1e-5,
+        "weight_decay": 1e-2,
+    },
+    "head": {
+        "lr": 1e-4,
+        "weight_decay": 1e-2,
+    },
 }
+CONFIG = {
+    'model_name': 'dinov2_vitb14',  
+    'image_size': 378,        
+    'batch_size': 30,          
+    'epochs': 20,             
+    'optim_config': OPTIM_CONFIG,
+    'backbone_lr': 5e-5,
+    'seed': 42,
+    'save_path': './model/best_model.pth',
+    'val_image_size': 378,
+    'run_name': 'dinov2_vitb14_378',
+    'warmup_epochs': 2,
+    'min_lr': 1e-7,
+}
+USE_WANDB = True
 
 # ====================================================
 #  유틸리티 함수
@@ -37,14 +55,14 @@ def seed_everything(seed):
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = True
 
-def train_one_epoch(model, loader, criterion, optimizer, scaler, device):
+def train_one_epoch(model: nn.Module, loader, criterion, optimizer, scheduler: optim.lr_scheduler, scaler, device, epoch, use_wandb=False):
     model.train()
     running_loss = 0.0
     correct = 0
     total = 0
     
     pbar = tqdm(loader, desc="Training")
-    for images, labels in pbar:
+    for step, (images, labels) in enumerate(pbar):
         images = images.to(device)
         labels = labels.to(device).float().unsqueeze(1)
         
@@ -67,6 +85,23 @@ def train_one_epoch(model, loader, criterion, optimizer, scaler, device):
         correct += (preds == labels).sum().item()
         
         pbar.set_postfix({'loss': running_loss / (pbar.n + 1)})
+        global_step = (epoch-1) * len(loader) + step
+
+        if not isinstance(scheduler, optim.lr_scheduler.ReduceLROnPlateau):
+            scheduler.step()
+
+        # Log metrics to wandb/step
+        if use_wandb:
+            grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
+            wandb.log({"train_step": loss.item()}, step=global_step)
+            wandb.log({"lr/step": optimizer.param_groups[0]['lr']}, step=global_step)
+            wandb.log({"grad_norm/step": grad_norm}, step=global_step)
+            wandb.log({
+                "pred/prob_mean": probs.mean().item(),
+                "pred/prob_std": probs.std().item(),
+            }, step=global_step)
+
+
         
     epoch_loss = running_loss / len(loader)
     epoch_acc = correct / total * 100
@@ -111,6 +146,16 @@ def main():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"사용 장치: {device}")
     
+    run = wandb.init(
+        # Set the wandb entity where your project will be logged (generally your team name).
+        entity="kdch6686-",
+        # Set the wandb project where this run will be logged.
+        project="HAI",
+        # Track hyperparameters and run metadata.
+        config=CONFIG,
+        name=CONFIG['run_name']
+    )
+
     # ----------------------------------------------------
     # 1. 데이터셋 & 로더 준비
     # ----------------------------------------------------
@@ -139,7 +184,7 @@ def main():
     # 모델 불러오기
     # ----------------------------------------------------
     print(f"모델 로드 중: {CONFIG['model_name']} (Size: {CONFIG['image_size']})...")
-    model = DeepFakeModel(model_name=CONFIG['model_name'], pretrained=True)
+    model = DeepFakeModelDinoV2(model_name=CONFIG['model_name'], pretrained=True)
     
     # model.py에 구현해둔 함수 호출
     if hasattr(model, 'set_gradient_checkpointing'):
@@ -151,9 +196,39 @@ def main():
     # 설정 (Loss, Optimizer, Scheduler)
     # ----------------------------------------------------
     criterion = nn.BCEWithLogitsLoss()
-    optimizer = optim.AdamW(model.parameters(), lr=CONFIG['lr'], weight_decay=1e-2)
+
+    backbone_params = []
+    head_params = []
+
+    for name, param in model.named_parameters():
+        if not param.requires_grad:
+            continue
+
+        if name.startswith("model"):   # backbone 기준
+            backbone_params.append(param)
+        else:
+            head_params.append(param)
+
+    param_groups = [
+        {
+            "params": backbone_params,
+            **OPTIM_CONFIG["backbone"]
+        },
+        {
+            "params": head_params,
+            **OPTIM_CONFIG["head"]
+        },
+    ]
     
-    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=CONFIG['epochs'], eta_min=1e-6)
+    optimizer = torch.optim.AdamW(param_groups)
+    total_steps = CONFIG["epochs"] * len(train_loader)
+    scheduler = cosine_with_min_lr(
+        optimizer,
+        warmup_steps=CONFIG['warmup_epochs']*len(train_loader),
+        total_steps=total_steps,
+        min_lr=CONFIG['min_lr']
+    )
+    # scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=CONFIG['epochs'], eta_min=1e-6)
     
     scaler = torch.cuda.amp.GradScaler()
     
@@ -166,19 +241,30 @@ def main():
     for epoch in range(CONFIG['epochs']):
         print(f"\nEpoch {epoch+1}/{CONFIG['epochs']} | LR: {optimizer.param_groups[0]['lr']:.6f}")
         
-        train_loss, train_acc = train_one_epoch(model, train_loader, criterion, optimizer, scaler, device)
+    
+        train_loss, train_acc = train_one_epoch(model, train_loader, criterion, optimizer, scheduler, scaler, device, epoch+1, use_wandb=USE_WANDB)
         print(f"   [Train] Loss: {train_loss:.4f} | Acc: {train_acc:.2f}%")
         
         val_loss, val_acc = validate(model, val_loader, criterion, device)
         print(f"   [Valid] Loss: {val_loss:.4f} | Acc: {val_acc:.2f}%")
         
-        # 스케줄러 업데이트
-        scheduler.step()
+        if isinstance(scheduler, optim.lr_scheduler.ReduceLROnPlateau):
+            # 스케줄러 업데이트
+            scheduler.step()
         
         if val_acc > best_acc:
             print(f"   최고 성능 갱신! ({best_acc:.2f}% -> {val_acc:.2f}%) './model' 폴더에 저장 중...")
             best_acc = val_acc
             torch.save(model.state_dict(), CONFIG['save_path'])
+
+        if USE_WANDB is not None:
+            # Wandb에 epoch별 메트릭 기록
+            wandb.log({
+                "train/loss": train_loss,
+                "train/accuracy": train_acc,
+                "val/loss": val_loss,
+                "val/accuracy": val_acc,
+            }, step=epoch+1)
             
     print(f"\n학습 완료! 최고 정확도: {best_acc:.2f}%")
     print(f"모델 저장 위치: {CONFIG['save_path']}")

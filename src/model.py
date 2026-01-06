@@ -2,6 +2,37 @@ import torch
 import torch.nn as nn
 import timm
 
+class DeepFakeModelDinoV2(nn.Module):
+    def __init__(self, model_name='dinov2_vitb14', in_chs=3, pretrained=True):
+        """
+        Args:
+            model_name (str): 사용할 모델 이름
+            pretrained (bool): ImageNet 사전 학습 가중치 사용 여부
+        """
+        super(DeepFakeModelDinoV2, self).__init__()
+
+        self.proj = nn.Conv2d(in_chs, 3, kernel_size=1) if in_chs != 3 else nn.Identity()
+        self.model = torch.hub.load("facebookresearch/dinov2", model_name)
+        self.head = nn.Linear(self.model.num_features, 1)
+
+    def forward(self, x):
+        x = self.proj(x)
+        x = self.model(x)
+        x = self.head(x)
+        return x
+        
+    
+    def set_gradient_checkpointing(self, enable=True):
+        """
+        VRAM 부족 시 이 함수를 호출하면 메모리를 아낄 수 있음.
+        (대신 학습 속도가 약 20~30% 느려짐)
+        """
+        if hasattr(self.model, 'set_grad_checkpointing'):
+            self.model.set_grad_checkpointing(enable)
+            print(f"Gradient Checkpointing {'Enabled' if enable else 'Disabled'} (Memory Saving)")
+        else:
+            print("이 모델은 Gradient Checkpointing을 지원하지 않습니다.")
+
 class DeepFakeModel(nn.Module):
     def __init__(self, model_name='efficientnet_b4', pretrained=True):
         """

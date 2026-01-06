@@ -7,6 +7,7 @@ from torch.utils.data import Dataset
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
 
+
 class DeepFakeDataset(Dataset):
     def __init__(self, root_dir, mode='train', image_size=380):
         self.root_dir = root_dir
@@ -61,7 +62,8 @@ class DeepFakeDataset(Dataset):
         if self.mode == 'train':
             return A.Compose([
                 # 혹시 몰라서 input과 같은 크기로 리사이즈
-                A.Resize(self.image_size, self.image_size),
+                # TODO: 이후에 하드코딩 제거
+                A.CenterCrop(self.image_size, self.image_size),
                 
                 # flip
                 A.HorizontalFlip(p=0.5),
@@ -82,7 +84,7 @@ class DeepFakeDataset(Dataset):
         else:
             # 검증
             return A.Compose([
-                A.Resize(self.image_size, self.image_size),
+                A.CenterCrop(self.image_size, self.image_size),
                 A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
                 ToTensorV2()
             ])
