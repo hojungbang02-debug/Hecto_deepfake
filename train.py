@@ -93,8 +93,9 @@ def train_one_epoch(model: nn.Module, loader, criterion, optimizer, scheduler: o
         # Log metrics to wandb/step
         if use_wandb:
             grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
+           
             wandb.log({
-                "gloal_step": global_step,
+                "global_step": global_step,
                 "train_loss/step": loss.item(),
                 "lr/step": optimizer.param_groups[0]['lr'],
                 "grad_norm/step": grad_norm,
@@ -159,8 +160,9 @@ def main():
     # 기본 x축은 global_step
     wandb.define_metric("global_step")
     wandb.define_metric("train/*", step_metric="global_step")
+    wandb.define_metric("train_loss/*", step_metric="global_step")
     wandb.define_metric("lr/*", step_metric="global_step")
-    wandb.define_metric("grad/*", step_metric="global_step")
+    wandb.define_metric("grad_norm/*", step_metric="global_step")
     wandb.define_metric("pred/*", step_metric="global_step")
 
     # val 쪽은 epoch을 x축으로

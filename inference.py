@@ -8,7 +8,7 @@ from facenet_pytorch import MTCNN
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
 
-from src.model import DeepFakeModel
+from src.model import DeepFakeModel, DeepFakeModelDinoV2
 
 # ==========================================
 # 설정
@@ -17,7 +17,7 @@ MODEL_PATH = './model/best_model.pth'
 TEST_DATA_DIR = './test_data'
 SUBMISSION_PATH = './submission.csv'
 
-IMG_SIZE = 380
+IMG_SIZE = 378
 MARGIN_RATIO = 1.3
 FRAME_INTERVAL = 10 
 
@@ -31,9 +31,10 @@ mtcnn = MTCNN(keep_all=True, select_largest=True,
               thresholds=[0.5, 0.6, 0.6], 
               device=device, post_process=False)
 
-model = DeepFakeModel(model_name='efficientnet_b4', pretrained=False)
+# model = DeepFakeModel(model_name='efficientnet_b4', pretrained=False)
+model = DeepFakeModelDinoV2(model_name='dinov2_vitb14', pretrained=False)
 if os.path.exists(MODEL_PATH):
-    model.load_state_dict(torch.load(MODEL_PATH, map_location=device))
+    model.load_state_dict(torch.load(MODEL_PATH, map_location=device, weights_only=True))
     model = model.to(device)
     model.eval()
 else:
