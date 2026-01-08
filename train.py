@@ -1,3 +1,4 @@
+import gc
 import os
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 import torch
@@ -30,17 +31,24 @@ OPTIM_CONFIG = {
 CONFIG = {
     'model_name': 'dinov2_vitb14',  
     'image_size': 378,        
-    'batch_size': 30,          
+    'batch_size': 32,          
     'epochs': 20,             
     'optim_config': OPTIM_CONFIG,
     'backbone_lr': 5e-5,
     'seed': 42,
     'save_path': './model/best_model.pth',
     'val_image_size': 378,
-    'run_name': 'dinov2_vitb14_378',
+    'run_name': 'dinov2_vitb14_378_SRM12',
     'warmup_epochs': 2,
+    'hidden_dim': [],
     'min_lr': 1e-7,
+    'dropout_rate': 0.3,
+    'filter_type': 'srm12',  # 'none', 'srm', 'srm6', 'srm12'   
 }
+
+SRM_FILTER = {'none': 3, 'srm': 3, 'srm6': 6, 'srm12': 12}
+CONFIG['in_chs'] = SRM_FILTER[CONFIG['filter_type']]
+
 USE_WANDB = True
 
 # ====================================================
@@ -87,20 +95,31 @@ def train_one_epoch(model: nn.Module, loader, criterion, optimizer, scheduler: o
         pbar.set_postfix({'loss': running_loss / (pbar.n + 1)})
         global_step = (epoch-1) * len(loader) + step
 
+        # Gradient Norm Cliipping
+        grad_head = torch.nn.utils.clip_grad_norm_(model.head.parameters(), max_norm=float('inf'))
+        grad_backbone = torch.nn.utils.clip_grad_norm_(model.model.parameters(), max_norm=float('inf'))
+        grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
+        
+
         if not isinstance(scheduler, optim.lr_scheduler.ReduceLROnPlateau):
             scheduler.step()
 
         # Log metrics to wandb/step
         if use_wandb:
-            grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
-           
+            
+            with torch.no_grad():
+                SRM_rate = model.srm.logit.sigmoid().item() if hasattr(model, 'srm') else 0.0
+
             wandb.log({
                 "global_step": global_step,
                 "train_loss/step": loss.item(),
                 "lr/step": optimizer.param_groups[0]['lr'],
-                "grad_norm/step": grad_norm,
+                "grad_norm/step": grad_norm.item(),
+                "grad_norm/head": grad_head.item(),
+                "grad_norm/backbone": grad_backbone.item(),
                 "pred/prob_mean": probs.mean().item(),
                 "pred/prob_std": probs.std().item(),
+                "filter/srm_rate": SRM_rate,
             })
 
 
@@ -164,6 +183,7 @@ def main():
     wandb.define_metric("lr/*", step_metric="global_step")
     wandb.define_metric("grad_norm/*", step_metric="global_step")
     wandb.define_metric("pred/*", step_metric="global_step")
+    wandb.define_metric("filter/*", step_metric="global_step")
 
     # val 쪽은 epoch을 x축으로
     wandb.define_metric("epoch")
@@ -190,20 +210,29 @@ def main():
         print("val_data 폴더가 없습니다. train_data를 검증용으로 사용합니다.")
         val_dataset = DeepFakeDataset(root_dir='./train_data', mode='val', image_size=CONFIG['image_size'])
 
-    train_loader = DataLoader(train_dataset, batch_size=CONFIG['batch_size'], shuffle=True, num_workers=0, pin_memory=True)
-    val_loader = DataLoader(val_dataset, batch_size=CONFIG['batch_size'], shuffle=False, num_workers=0, pin_memory=True)
+    train_loader = DataLoader(train_dataset, batch_size=CONFIG['batch_size'], shuffle=True, num_workers=6, pin_memory=True)
+    val_loader = DataLoader(val_dataset, batch_size=CONFIG['batch_size'], shuffle=False, num_workers=6  , pin_memory=True)
     
     # ----------------------------------------------------
     # 모델 불러오기
     # ----------------------------------------------------
     print(f"모델 로드 중: {CONFIG['model_name']} (Size: {CONFIG['image_size']})...")
-    model = DeepFakeModelDinoV2(model_name=CONFIG['model_name'], pretrained=True)
+    model = DeepFakeModelDinoV2(model_name=CONFIG['model_name'], in_chs=CONFIG['in_chs'], pretrained=True, hidden_dim=CONFIG['hidden_dim'], drop_rate=CONFIG['dropout_rate'])
+    print(model)
     
     # model.py에 구현해둔 함수 호출
     if hasattr(model, 'set_gradient_checkpointing'):
         model.set_gradient_checkpointing(True)
         
     model = model.to(device)
+
+    # ----------------------------------------------------
+    # Backbone의 일부 레이어 동결 (Fine-tuning 시)
+    # ----------------------------------------------------
+
+    # 일단 BackBone전체동결
+    for param in model.model.parameters():
+        param.requires_grad = False
     
     # ----------------------------------------------------
     # 설정 (Loss, Optimizer, Scheduler)
@@ -243,7 +272,7 @@ def main():
     )
     # scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=CONFIG['epochs'], eta_min=1e-6)
     
-    scaler = torch.cuda.amp.GradScaler()
+    scaler = torch.amp.GradScaler(device=device.type)
     
     # ----------------------------------------------------
     # 학습 시작
@@ -252,7 +281,7 @@ def main():
     print(f"\n학습 시작! (Epochs: {CONFIG['epochs']})")
     
     for epoch in range(CONFIG['epochs']):
-        print(f"\nEpoch {epoch+1}/{CONFIG['epochs']} | LR: {optimizer.param_groups[0]['lr']:.6f}")
+        print(f"\nEpoch {epoch+1}/{CONFIG['epochs']} | LR: {optimizer.param_groups[0]['lr']:.9f}")
         
     
         train_loss, train_acc = train_one_epoch(model, train_loader, criterion, optimizer, scheduler, scaler, device, epoch+1, use_wandb=USE_WANDB)
@@ -272,6 +301,7 @@ def main():
 
         if USE_WANDB is not None:
             # Wandb에 epoch별 메트릭 기록
+
             wandb.log({
                 "epoch": epoch + 1,
                 "train/loss": train_loss,
@@ -279,9 +309,15 @@ def main():
                 "val/loss": val_loss,
                 "val/accuracy": val_acc,
             })
+        # 1. GPU: 캐시 비우기
+        torch.cuda.empty_cache()
+        # 2. Python GC 강제 실행
+        gc.collect()
             
     print(f"\n학습 완료! 최고 정확도: {best_acc:.2f}%")
     print(f"모델 저장 위치: {CONFIG['save_path']}")
+
+    
 
 if __name__ == "__main__":
     main()
