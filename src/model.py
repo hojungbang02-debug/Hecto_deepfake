@@ -3,7 +3,7 @@ import torch.nn as nn
 import timm
 
 class DeepFakeModel(nn.Module):
-    def __init__(self, model_name='efficientnet_b4', pretrained=True):
+    def __init__(self, model_name='efficientnet_b4', pretrained=True, drop_rate=0.4, drop_path_rate=0.2):
         """
         Args:
             model_name (str): 사용할 모델 이름

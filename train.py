@@ -51,7 +51,7 @@ def train_one_epoch(model, loader, criterion, optimizer, scaler, device):
         optimizer.zero_grad()
         
         # Mixed Precision (메모리 절약 & 속도 향상)
-        with torch.cuda.amp.autocast():
+        with torch.amp.autocast(device_type=device.type):
             outputs = model(images)
             loss = criterion(outputs, labels)
             

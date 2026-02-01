@@ -8,7 +8,7 @@ import albumentations as A
 from albumentations.pytorch import ToTensorV2
 
 class DeepFakeDataset(Dataset):
-    def __init__(self, root_dir, mode='train', image_size=380):
+    def __init__(self, root_dir, mode='train', image_size=380, transform=None):
         self.root_dir = root_dir
         self.mode = mode
         self.image_size = image_size
@@ -19,7 +19,7 @@ class DeepFakeDataset(Dataset):
         self._load_data()
         
         # 변환
-        self.transform = self._get_transforms()
+        self.transform = transform or self._get_transforms()
 
     def _load_data(self):
         # 0: Real, 1: Fake
