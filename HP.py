@@ -15,6 +15,7 @@ OPTIM_MAP = {
 def objective(trial: optuna.Trial) -> float:
     cfg = Config()
     cfg.epochs = 5
+    cfg.batch_size = 64
     cfg.optimizer_params['lr'] = trial.suggest_float("lr", 1e-5, 1e-3, log=True)
     cfg.optimizer_params['weight_decay'] = trial.suggest_float("weight_decay", 1e-5, 3e-3,  log=True)
     cfg.optimizer_cls = OPTIM_MAP[trial.suggest_categorical("optimizer", ["AdamW", "Adam", "SGD"])]

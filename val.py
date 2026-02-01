@@ -1,3 +1,4 @@
+from dataclasses import asdict
 import optuna
 from src.augmentation import get_train_transform
 from train import train_one_epoch
@@ -120,6 +121,8 @@ def hold_out_train_and_validate(cfg: Config, trial: optuna.Trial=None) -> Tuple[
     """
     seed_everything(cfg.seed)
 
+    
+
     device = cfg.device
     transform = get_train_transform(cfg.image_size, cfg.p_horizontal_flip, cfg.p_random_rotate90, cfg.p_transpose) if cfg.use_default_transform else None
     early_stopping = EarlyStopping(patience=cfg.patience, min_delta=cfg.min_delta, mode=cfg.mode, verbose=cfg.verbose)
@@ -163,6 +166,7 @@ def hold_out_train_and_validate(cfg: Config, trial: optuna.Trial=None) -> Tuple[
     # --- Train loop ---
     best_auc = -1.0
     best_loss = float("inf")
+
 
     for epoch in range(cfg.epochs):
         # Train one epoch (uses your existing function)
