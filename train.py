@@ -97,6 +97,8 @@ def validate(model, loader, criterion, device):
     epoch_acc = correct / total * 100
     return epoch_loss, epoch_acc
 
+
+
 # ====================================================
 # 메인 실행 함수
 # ====================================================
@@ -156,6 +158,8 @@ def main():
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=CONFIG['epochs'], eta_min=1e-6)
     
     scaler = torch.cuda.amp.GradScaler()
+
+    
     
     # ----------------------------------------------------
     # 학습 시작

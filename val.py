@@ -151,8 +151,8 @@ def hold_out_train_and_validate(cfg: Config, trial: optuna.Trial=None) -> Tuple[
 
     # --- Model ---
     model = DeepFakeModel(model_name=cfg.model_name, pretrained=True, drop_rate=cfg.drop_rate, drop_path_rate=cfg.drop_path_rate)
-    if getattr(cfg, "use_gradient_checkpointing", False) and hasattr(model, "set_gradient_checkpointing"):
-        model.set_gradient_checkpointing(True)
+    # if getattr(cfg, "use_gradient_checkpointing", False) and hasattr(model, "set_gradient_checkpointing"):
+    #     model.set_gradient_checkpointing(True)
     model = model.to(device)
 
     # --- Loss / Optim / Sched / AMP ---

@@ -63,4 +63,4 @@ ff_dataset/
 *.mkv
 *.jpg
 
-/**/ */
+**/*.pth

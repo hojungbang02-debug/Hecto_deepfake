@@ -14,13 +14,13 @@ OPTIM_MAP = {
 
 def objective(trial: optuna.Trial) -> float:
     cfg = Config()
-    cfg.epochs = 5
-    cfg.batch_size = 64
-    cfg.optimizer_params['lr'] = trial.suggest_float("lr", 1e-5, 1e-3, log=True)
-    cfg.optimizer_params['weight_decay'] = trial.suggest_float("weight_decay", 1e-5, 3e-3,  log=True)
-    cfg.optimizer_cls = OPTIM_MAP[trial.suggest_categorical("optimizer", ["AdamW", "Adam", "SGD"])]
+    cfg.epochs = 2
+    cfg.batch_size = 25
+    cfg.optimizer_params['lr'] = trial.suggest_float("lr", 1e-5, 3e-4, log=True)
+    cfg.optimizer_params['weight_decay'] = trial.suggest_float("weight_decay", 1e-5, 1e-3,  log=True)
+    cfg.optimizer_cls = OPTIM_MAP[trial.suggest_categorical("optimizer", ["AdamW", "Adam"])]
     cfg.model_name = trial.suggest_categorical("model_name", ["efficientnet_b4", "efficientnet_b5"])
-    cfg.drop_rate = trial.suggest_float("drop_rate", 0.0, 0.6)
+    cfg.drop_rate = trial.suggest_float("drop_rate", 0.0, 0.3)
     cfg.drop_path_rate = trial.suggest_float("drop_path_rate", 0.0, 0.3)
 
     run_dir = make_run_dir("runs", trial)
@@ -58,7 +58,7 @@ if __name__ == "__main__":
     sampler = optuna.samplers.TPESampler(seed=42, multivariate=True)
     pruner = optuna.pruners.MedianPruner(
         n_startup_trials=10,
-        n_warmup_steps=2,
+        n_warmup_steps=0,
         interval_steps=1,
     )
 
@@ -70,4 +70,4 @@ if __name__ == "__main__":
         sampler=sampler,
         pruner=pruner,
     )
-    study.optimize(objective, n_trials=100)
+    study.optimize(objective, n_trials=25)
