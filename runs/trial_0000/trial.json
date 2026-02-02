@@ -1,0 +1,11 @@
+{
+  "trial_number": 0,
+  "params": {
+    "lr": 3.574712922600245e-05,
+    "weight_decay": 0.0007969454818643932,
+    "optimizer": "AdamW",
+    "model_name": "efficientnet_b4",
+    "drop_rate": 0.017425083650459836,
+    "drop_path_rate": 0.2598528437324805
+  }
+}

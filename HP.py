@@ -46,7 +46,7 @@ def objective(trial: optuna.Trial) -> float:
     trial.set_user_attr("full_config", cfg_dict)
 
     try:
-        return hold_out_train_and_validate(cfg, trial)
+        return hold_out_train_and_validate(cfg, trial)[1]
     except RuntimeError as e:
         if "out of memory" in str(e).lower():
             if torch.cuda.is_available():
@@ -57,7 +57,7 @@ def objective(trial: optuna.Trial) -> float:
 if __name__ == "__main__":
     sampler = optuna.samplers.TPESampler(seed=42, multivariate=True)
     pruner = optuna.pruners.MedianPruner(
-        n_startup_trials=10,
+        n_startup_trials=5,
         n_warmup_steps=0,
         interval_steps=1,
     )
